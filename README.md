@@ -1,79 +1,109 @@
 # Study Copilot
 
-A personal assistant that reads your Blackboard, cuts through the noise, and tells you what actually matters this week. Runs entirely on your machine — no API keys, no subscriptions.
+> Your Blackboard, without the noise — sync courses locally, see what matters this week, ask an AI what to do first.
 
-Built for [Humber College](https://learn.humber.ca)'s Blackboard Ultra, but the scraper is structured so you can point it at another campus with a few config changes.
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Playwright](https://img.shields.io/badge/Playwright-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![Weekly dashboard](docs/screenshots/dashboard.png)
+A local-first assistant for [Blackboard Ultra](https://www.blackboard.com/). Built around Humber College's instance, but configurable for other campuses.
 
-## Why I built this
+**No paid APIs. No cloud. Your session stays on your machine.**
 
-Blackboard holds everything — announcements, assignments, grades — but finding *what's due this week* means opening seven courses and reading walls of text. Half the deadlines aren't even in a date field; they're buried in an announcement from three weeks ago.
+![Weekly dashboard — alerts, lessons, and announcements filtered to the current week](docs/screenshots/dashboard.png)
 
-Study Copilot syncs that data locally, pulls dates out of the text when Blackboard doesn't, and shows a single dashboard: alerts, this week's work, and your grades. If you have [Ollama](https://ollama.com/) running, you can also ask "what should I do first?" and get an answer based on real synced data.
+---
 
-## What it does
+## Why this exists
 
-- **SSO login** — Playwright opens Chromium, you sign in once (Microsoft/Humber), session is saved locally
-- **Sync** — courses, announcements, course content, and gradebook columns
-- **Weekly view** — only items with dates falling in the current calendar week (Mon–Sun), not your entire semester history
-- **Alerts** — midterms, quizzes, and deadlines surfaced from announcement text
-- **Morning briefing + chat** — optional, powered by Ollama
+Every semester, Blackboard becomes a pile of announcements, hidden deadlines, and grades spread across seven courses. Most due dates aren't even in a proper field — they're somewhere in a paragraph from Week 3.
+
+Study Copilot pulls that data locally, extracts dates from the text when Blackboard doesn't provide them, and gives you one place to see:
+
+- what's **due this week**
+- what **professors posted** that actually matters now
+- how your **grades** look
+- what to **prioritize** (with Ollama, if you want a chat)
+
+---
+
+## Features
+
+| | |
+|---|---|
+| **SSO login** | Playwright opens Chromium — sign in once via Microsoft/Humber, session saved locally |
+| **Blackboard sync** | Courses, announcements, content items, gradebook columns |
+| **Weekly filter** | Dashboard shows the current calendar week (Mon–Sun), not your whole semester |
+| **Smart alerts** | Midterms, quizzes, and deadlines parsed from announcement text |
+| **Morning briefing** | Optional daily summary via Ollama |
+| **Personal chat** | Ask things like *"what should I submit first?"* using real synced data |
+
+---
 
 ## Tech stack
 
-| Layer | Tools |
-|---|---|
-| Backend | Python, FastAPI, Playwright, SQLite |
-| Frontend | Next.js, React, Tailwind |
-| AI | Ollama (`llama3.2` or whatever you prefer) |
+**Backend** — Python, FastAPI, Playwright, SQLite  
+**Frontend** — Next.js, React, Tailwind CSS  
+**AI** — Ollama (`llama3.2` or any model you prefer)
 
-Everything is free to run locally.
+All free, all local.
+
+---
 
 ## How it works
 
-Blackboard doesn't give students a stable public API. So instead of fighting that, the app:
+Blackboard doesn't expose a stable public API for students. The workaround:
 
-1. **Logs in through the browser** (`login.py` runs as its own process so SSO popups work on Windows)
-2. **Reuses the session** to hit internal REST endpoints found in DevTools:
-   - `/learn/api/public/v1/users/me/courses`
-   - `/learn/api/public/v1/courses/{id}/announcements`
-   - `/learn/api/public/v1/courses/{id}/contents?recursive=true`
-   - `/learn/api/public/v1/courses/{id}/gradebook/columns`
-3. **Stores everything in SQLite** and serves it through a FastAPI backend
+1. **Browser login** — `login.py` runs as a separate process so SSO popups work on Windows
+2. **Session reuse** — internal REST endpoints (found via DevTools) fetch the data:
+   ```
+   GET /learn/api/public/v1/users/me/courses
+   GET /learn/api/public/v1/courses/{id}/announcements
+   GET /learn/api/public/v1/courses/{id}/contents?recursive=true
+   GET /learn/api/public/v1/courses/{id}/gradebook/columns
+   ```
+3. **Local storage** — everything lands in SQLite, served through FastAPI
 
-A few things I had to work around:
+**Windows gotchas I ran into:**
 
-- **Playwright + uvicorn on Windows** — sync runs as a subprocess (`sync_job.py`) instead of inside the API process
-- **Missing due dates** — most assignments come back with `due_at: null`, so dates get parsed from announcement bodies (`"Midterm on July 9"`, `"June 29, 2026"`, etc.)
-- **Dashboard clutter** — a full sync can return 35+ announcements and 75+ items; the week filter keeps only what's relevant right now
-
-```
-Next.js (:3000)  ←→  FastAPI + SQLite (:8000)  ←→  Blackboard (Playwright session)
-                              ↓
-                         Ollama (optional)
-```
-
-## Project layout
+- Playwright can't run inside uvicorn's asyncio loop reliably → sync uses `sync_job.py` as a subprocess
+- Most assignments return `due_at: null` → dates get parsed from announcement bodies (`"Midterm on July 9"`, etc.)
+- A full sync can return 35+ announcements and 75+ items → week filter keeps the dashboard usable
 
 ```
-study-copilot/
-├── backend/
-│   ├── app/scraper/       # browser login, Ultra API client, parsers
-│   ├── app/services/      # alerts, week filtering, Ollama
-│   ├── app/db/            # SQLite
-│   ├── login.py           # standalone SSO login
-│   └── sync_job.py        # sync subprocess
-├── frontend/
-│   └── components/Dashboard.tsx
-└── start-all.ps1          # Windows shortcut to run both servers
+┌──────────────┐      REST       ┌─────────────────┐     Playwright     ┌─────────────┐
+│   Next.js    │ ◄────────────► │  FastAPI + SQLite│ ◄────────────────► │  Blackboard │
+│   :3000      │                │      :8000       │                    │  (Humber)   │
+└──────────────┘                └────────┬─────────┘                    └─────────────┘
+                                         │
+                                         ▼
+                                  ┌─────────────┐
+                                  │   Ollama    │
+                                  │  (optional) │
+                                  └─────────────┘
 ```
 
-## Getting started
+---
 
-You'll need Python 3.12+, Node 18+, and optionally Ollama.
+## Quick start
 
-**Ollama** (optional — for chat and briefing):
+**Requirements:** Python 3.12+, Node 18+, optionally [Ollama](https://ollama.com/)
+
+```powershell
+# Clone and run (Windows)
+git clone https://github.com/matheusmaggiorini/study-copilot.git
+cd study-copilot
+.\start-all.ps1
+```
+
+Open **http://localhost:3000** → **Connect Blackboard** → sign in → **Sync now**.
+
+<details>
+<summary>Manual setup</summary>
+
+**Ollama** (optional):
 
 ```bash
 ollama pull llama3.2
@@ -92,14 +122,6 @@ copy .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-Edit `.env` for your campus (Humber is pre-configured in `.env.example`):
-
-```env
-BLACKBOARD_LOGIN_URL=https://learn.humber.ca
-BLACKBOARD_COURSES_URL=https://learn.humber.ca/ultra/course
-SYNC_HEADLESS=false
-```
-
 **Frontend:**
 
 ```powershell
@@ -108,25 +130,56 @@ npm install
 npm run dev
 ```
 
-Or on Windows, from the repo root:
+Edit `backend/.env` for your campus:
 
-```powershell
-.\start-all.ps1
+```env
+BLACKBOARD_LOGIN_URL=https://learn.humber.ca
+BLACKBOARD_COURSES_URL=https://learn.humber.ca/ultra/course
+SYNC_HEADLESS=false
 ```
 
-Then open **http://localhost:3000**, click **Connect Blackboard**, sign in, and hit **Sync now**.
+</details>
 
-## Don't commit these
+---
 
-`.env`, `data/session.json`, the SQLite database, and the browser profile are all gitignored. They contain your login session and personal data.
+## Project structure
 
-## Known rough edges
+```
+study-copilot/
+├── backend/
+│   ├── app/scraper/       # browser login, Ultra API, HTML/date parsers
+│   ├── app/services/      # alerts, week filter, Ollama integration
+│   ├── app/db/            # SQLite persistence
+│   ├── login.py           # standalone SSO login
+│   └── sync_job.py        # sync subprocess (Windows-safe)
+├── frontend/
+│   └── components/Dashboard.tsx
+├── docs/screenshots/
+└── start-all.ps1
+```
 
-- Blackboard HTML and internal APIs vary by institution — you may need to tweak parsers for your school
-- SSO sessions expire; reconnect when sync starts failing
-- Chat and briefing need Ollama running; the dashboard works without it
-- Not every assignment has a structured due date — text parsing isn't perfect
+---
+
+## Privacy
+
+These files stay on your machine and are **gitignored** — never commit them:
+
+- `.env`
+- `data/session.json`
+- `data/study_copilot.db`
+- `data/browser_profile/`
+
+---
+
+## Known limitations
+
+- Blackboard varies by institution — parsers may need tweaks for your school
+- SSO sessions expire; reconnect when sync fails
+- Chat/briefing require Ollama; the dashboard works without it
+- Text-based date parsing isn't perfect when deadlines aren't structured
+
+---
 
 ## License
 
-MIT
+MIT — free to use for learning and portfolio projects.
