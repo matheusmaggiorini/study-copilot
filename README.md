@@ -190,12 +190,6 @@ Esses arquivos já estão no `.gitignore`.
 - Nem todo conteúdo traz `due_at`; prazos dependem de extração de texto
 - Ollama offline desabilita chat/briefing, mas o dashboard funciona
 
-## Próximos passos
-
-- [ ] Calendário / To Do nativo do Ultra
-- [ ] Notificações locais ou Telegram
-- [ ] Suporte multi-campus configurável
-- [ ] Deploy opcional (backend + frontend)
 
 ## Licença
 
