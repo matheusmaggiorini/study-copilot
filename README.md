@@ -12,6 +12,8 @@ A local-first assistant for [Blackboard Ultra](https://www.blackboard.com/). Bui
 
 **No paid APIs. No cloud. Your session stays on your machine.**
 
+> This project is an independent portfolio project, not an official Blackboard or Humber College integration. Users should connect only their own authorized accounts.
+
 ![Weekly dashboard — alerts, lessons, and announcements filtered to the current week](docs/screenshots/dashboard.png)
 
 ---
